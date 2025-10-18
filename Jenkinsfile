@@ -6,7 +6,7 @@ pipeline {
     environment {
         // ใช้ค่าเป็น "credentialsId" ของ Jenkins โดยตรงสำหรับ docker.withRegistry
         DOCKER_HUB_CREDENTIALS_ID = 'dockerhub-cred'
-        DOCKER_REPO = 'iamsamitdev/express-docker-app'
+        DOCKER_REPO = 'kruntum/express-docker-app-jenkins'
         APP_NAME = 'express-docker-app'
     }
 
