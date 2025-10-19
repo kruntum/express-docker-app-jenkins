@@ -50,7 +50,8 @@ app.get('/api/products', (_: Request, res: Response) => {
 app.get('/api/orders', (_: Request, res: Response) => {
   const orders = [
     { id: 1, userId: 1, productId: 2, quantity: 1 },
-    { id: 2, userId: 2, productId: 3, quantity: 2 }
+    { id: 2, userId: 2, productId: 3, quantity: 2 },
+     { id: 3, userId: 3, productId: 4, quantity: 3 }
   ]
   res.json(orders)
 })
