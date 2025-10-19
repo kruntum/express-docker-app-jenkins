@@ -121,11 +121,11 @@ pipeline {
         // n8n-webhook คือ Jenkins Secret Text Credential ที่เก็บ URL ของ n8n webhook
         // ต้องสร้าง Credential นี้ใน Jenkins ก่อน ใช้งาน
         // โดยใช้ ID ว่า n8n-webhook
-    post {
-        success {
-            script {
-                withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
-                    def payload = [
+        post {
+            success {
+                script {
+                    withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
+                        def payload = [
                         project  : env.JOB_NAME,
                         stage    : 'Deploy Local',
                         status   : 'success',
@@ -135,34 +135,33 @@ pipeline {
                         url      : 'http://localhost:3000/',
                         timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX")
                     ]
-                    def body = groovy.json.JsonOutput.toJson(payload)
-                    try {
-                        httpRequest acceptType: 'APPLICATION_JSON',
+                        def body = groovy.json.JsonOutput.toJson(payload)
+                        try {
+                            httpRequest acceptType: 'APPLICATION_JSON',
                                     contentType: 'APPLICATION_JSON',
                                     httpMode: 'POST',
                                     requestBody: body,
                                     url: N8N_WEBHOOK_URL,
                                     validResponseCodes: '100:599'
-                        echo 'n8n webhook (success) sent via httpRequest.'
+                            echo 'n8n webhook (success) sent via httpRequest.'
                     } catch (err) {
-                        echo "httpRequest failed or not available: ${err}. Falling back to Java URLConnection..."
-                        try {
-                            def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
-                            conn.setRequestMethod('POST')
-                            conn.setDoOutput(true)
-                            conn.setRequestProperty('Content-Type', 'application/json')
-                            conn.getOutputStream().withWriter('UTF-8') { it << body }
-                            int rc = conn.getResponseCode()
-                            echo "n8n webhook (success) via URLConnection, response code: ${rc}"
+                            echo "httpRequest failed or not available: ${err}. Falling back to Java URLConnection..."
+                            try {
+                                def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
+                                conn.setRequestMethod('POST')
+                                conn.setDoOutput(true)
+                                conn.setRequestProperty('Content-Type', 'application/json')
+                                conn.getOutputStream().withWriter('UTF-8') { it << body }
+                                int rc = conn.getResponseCode()
+                                echo "n8n webhook (success) via URLConnection, response code: ${rc}"
                         } catch (e2) {
-                            echo "Failed to notify n8n (success): ${e2}"
+                                echo "Failed to notify n8n (success): ${e2}"
+                            }
                         }
                     }
                 }
             }
         }
-    }
-
     }
     // กำหนด post actions
     // เช่น การแจ้งเตือนเมื่อ pipeline เสร็จสิ้น
@@ -174,16 +173,16 @@ pipeline {
         success {
             echo 'Pipeline succeeded!'
         }
-    failure {
-        // ส่งข้อมูลไปยัง n8n webhook เมื่อ pipeline ล้มเหลว
-        // ใช้ Jenkins HTTP Request Plugin (ต้องติดตั้งก่อน)
-        // หรือใช้ Java URLConnection แทน (fallback) ถ้า httpRequest ไม่ได้ติดตั้ง
-        // n8n-webhook คือ Jenkins Secret Text Credential ที่เก็บ URL ของ n8
-        // ต้องสร้าง Credential นี้ใน Jenkins ก่อน ใช้งาน
-        // โดยใช้ ID ว่า n8n-webhook
-        script {
-            withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
-                def payload = [
+        failure {
+            // ส่งข้อมูลไปยัง n8n webhook เมื่อ pipeline ล้มเหลว
+            // ใช้ Jenkins HTTP Request Plugin (ต้องติดตั้งก่อน)
+            // หรือใช้ Java URLConnection แทน (fallback) ถ้า httpRequest ไม่ได้ติดตั้ง
+            // n8n-webhook คือ Jenkins Secret Text Credential ที่เก็บ URL ของ n8
+            // ต้องสร้าง Credential นี้ใน Jenkins ก่อน ใช้งาน
+            // โดยใช้ ID ว่า n8n-webhook
+            script {
+                withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
+                    def payload = [
                     project  : env.JOB_NAME,
                     stage    : 'Pipeline',
                     status   : 'failed',
@@ -193,27 +192,28 @@ pipeline {
                     url      : 'http://localhost:3000/',
                     timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX")
                 ]
-                def body = groovy.json.JsonOutput.toJson(payload)
-                try {
-                    httpRequest acceptType: 'APPLICATION_JSON',
+                    def body = groovy.json.JsonOutput.toJson(payload)
+                    try {
+                        httpRequest acceptType: 'APPLICATION_JSON',
                                 contentType: 'APPLICATION_JSON',
                                 httpMode: 'POST',
                                 requestBody: body,
                                 url: N8N_WEBHOOK_URL,
                                 validResponseCodes: '100:599'
-                    echo 'n8n webhook (failure) sent via httpRequest.'
+                        echo 'n8n webhook (failure) sent via httpRequest.'
                 } catch (err) {
-                    echo "httpRequest failed or not available: ${err}. Falling back to Java URLConnection..."
-                    try {
-                        def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
-                        conn.setRequestMethod('POST')
-                        conn.setDoOutput(true)
-                        conn.setRequestProperty('Content-Type', 'application/json')
-                        conn.getOutputStream().withWriter('UTF-8') { it << body }
-                        int rc = conn.getResponseCode()
-                        echo "n8n webhook (failure) via URLConnection, response code: ${rc}"
+                        echo "httpRequest failed or not available: ${err}. Falling back to Java URLConnection..."
+                        try {
+                            def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
+                            conn.setRequestMethod('POST')
+                            conn.setDoOutput(true)
+                            conn.setRequestProperty('Content-Type', 'application/json')
+                            conn.getOutputStream().withWriter('UTF-8') { it << body }
+                            int rc = conn.getResponseCode()
+                            echo "n8n webhook (failure) via URLConnection, response code: ${rc}"
                     } catch (e2) {
-                        echo "Failed to notify n8n (failure): ${e2}"
+                            echo "Failed to notify n8n (failure): ${e2}"
+                        }
                     }
                 }
             }
