@@ -1,3 +1,4 @@
+/* groovylint-disable CompileStatic, LineLength */
 pipeline {
     // ใช้ agent any เพราะ build จะทำงานบน Jenkins controller (Linux container) อยู่แล้ว
     agent any
@@ -5,34 +6,33 @@ pipeline {
     // กัน “เช็คเอาต์ซ้ำซ้อน”
     // ถ้า job เป็นแบบ Pipeline from SCM / Multibranch แนะนำเพิ่ม options { skipDefaultCheckout(true) }
     // เพื่อปิดการ checkout อัตโนมัติก่อนเข้า stages (เพราะเรามี checkout scm อยู่แล้ว)
-    options { 
+    options {
         skipDefaultCheckout(true)   // ถ้าเป็น Pipeline from SCM/Multi-branch
     }
 
     // กำหนด environment variables
     environment {
         DOCKER_HUB_CREDENTIALS_ID = 'dockerhub-cred'
-        DOCKER_REPO               = "chalermrit/express-docker-app-jenkins"
-        APP_NAME                  = "express-docker-app"
+        DOCKER_REPO               = 'chalermrit/express-docker-app-jenkins'
+        APP_NAME                  = 'express-docker-app-jenkins'
     }
 
     // กำหนด stages ของ Pipeline
     stages {
-
         // Stage 1: ดึงโค้ดล่าสุดจาก Git
         // ใช้ checkout scm หากใช้ Pipeline from SCM
         // หรือใช้ git url: 'https://github.com/your-username/your-repo.git'
         stage('Checkout') {
             steps {
-                echo "Checking out code..."
+                echo 'Checking out code...'
                 checkout scm
-                // หรือใช้แบบกำหนดเอง หากไม่ใช้ Pipeline from SCM:
-                // git url: 'https://github.com/your-username/your-repo.git'
+            // หรือใช้แบบกำหนดเอง หากไม่ใช้ Pipeline from SCM:
+            // git url: 'https://github.com/your-username/your-repo.git'
             }
         }
 
         // Stage 2: ติดตั้ง dependencies และ Run test
-        // ใช้ Node.js plugin (ต้องติดตั้ง NodeJS plugin ก่อน) ใน Jenkins หรือ Node.js ใน Docker 
+        // ใช้ Node.js plugin (ต้องติดตั้ง NodeJS plugin ก่อน) ใน Jenkins หรือ Node.js ใน Docker
         // ถ้ามี package-lock.json ให้ใช้ npm ci แทน npm install จะเร็วและล็อกเวอร์ชันชัดเจนกว่า
         stage('Install & Test') {
             steps {
@@ -61,7 +61,7 @@ pipeline {
         // ตัวแปร DOCKER_USER และ DOCKER_PASS ไม่ได้ถูกกำหนดไว้ที่ไหนล่วงหน้าครับ แต่มันถูก "สร้างขึ้นมาชั่วคราว" โดยฟังก์ชัน withCredentials เอง
         // เมื่อเจอแล้ว มันจะนำค่า username และ password จาก Credential นั้นออกมา
         // ปลอดภัยหรือไม่? Password จะแสดงใน Log หรือเปล่า?
-        // ปลอดภัยมาก และ Password จะไม่แสดงใน Log 
+        // ปลอดภัยมาก และ Password จะไม่แสดงใน Log
         // Jenkins ฉลาดพอที่จะรู้ว่าค่าที่มาจาก withCredentials เป็นข้อมูลลับ (Secret) ต่อให้คุณใช้คำสั่ง echo "${DOCKER_PASS}" Jenkins ก็จะ ไม่แสดงค่า Password จริงๆ ใน Console Log แต่จะแสดงเป็น ******** แทนโดยอัตโนมัติ
         // การทำงานของ Pipe | และ --password-stdin
         // echo "\${DOCKER_PASS}": คำสั่งนี้จะส่งค่า Password จริงๆ ออกไป
@@ -114,8 +114,56 @@ pipeline {
                 """
             }
         }
+
+        // ส่งข้อมูลไปยัง n8n webhook เมื่อ deploy สำเร็จ
+        // ใช้ Jenkins HTTP Request Plugin (ต้องติดตั้งก่อน)
+        // หรือใช้ Java URLConnection แทน (fallback) ถ้า httpRequest ไม่ได้ติดตั้ง
+        // n8n-webhook คือ Jenkins Secret Text Credential ที่เก็บ URL ของ n8n webhook
+        // ต้องสร้าง Credential นี้ใน Jenkins ก่อน ใช้งาน
+        // โดยใช้ ID ว่า n8n-webhook
+    post {
+        success {
+            script {
+                withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
+                    def payload = [
+                        project  : env.JOB_NAME,
+                        stage    : 'Deploy Local',
+                        status   : 'success',
+                        build    : env.BUILD_NUMBER,
+                        image    : "${env.DOCKER_REPO}:latest",
+                        container: env.APP_NAME,
+                        url      : 'http://localhost:3000/',
+                        timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX")
+                    ]
+                    def body = groovy.json.JsonOutput.toJson(payload)
+                    try {
+                        httpRequest acceptType: 'APPLICATION_JSON',
+                                    contentType: 'APPLICATION_JSON',
+                                    httpMode: 'POST',
+                                    requestBody: body,
+                                    url: N8N_WEBHOOK_URL,
+                                    validResponseCodes: '100:599'
+                        echo 'n8n webhook (success) sent via httpRequest.'
+                    } catch (err) {
+                        echo "httpRequest failed or not available: ${err}. Falling back to Java URLConnection..."
+                        try {
+                            def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
+                            conn.setRequestMethod('POST')
+                            conn.setDoOutput(true)
+                            conn.setRequestProperty('Content-Type', 'application/json')
+                            conn.getOutputStream().withWriter('UTF-8') { it << body }
+                            int rc = conn.getResponseCode()
+                            echo "n8n webhook (success) via URLConnection, response code: ${rc}"
+                        } catch (e2) {
+                            echo "Failed to notify n8n (success): ${e2}"
+                        }
+                    }
+                }
+            }
+        }
     }
 
+    }
     // กำหนด post actions
     // เช่น การแจ้งเตือนเมื่อ pipeline เสร็จสิ้น
     // สามารถเพิ่มการแจ้งเตือนผ่าน email, Slack, หรืออื่นๆ ได้ตามต้องการ
@@ -124,11 +172,51 @@ pipeline {
             echo "Pipeline finished with status: ${currentBuild.currentResult}"
         }
         success {
-            echo "Pipeline succeeded!"
+            echo 'Pipeline succeeded!'
         }
-        failure {
-            echo "Pipeline failed!"
+    failure {
+        // ส่งข้อมูลไปยัง n8n webhook เมื่อ pipeline ล้มเหลว
+        // ใช้ Jenkins HTTP Request Plugin (ต้องติดตั้งก่อน)
+        // หรือใช้ Java URLConnection แทน (fallback) ถ้า httpRequest ไม่ได้ติดตั้ง
+        // n8n-webhook คือ Jenkins Secret Text Credential ที่เก็บ URL ของ n8
+        // ต้องสร้าง Credential นี้ใน Jenkins ก่อน ใช้งาน
+        // โดยใช้ ID ว่า n8n-webhook
+        script {
+            withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
+                def payload = [
+                    project  : env.JOB_NAME,
+                    stage    : 'Pipeline',
+                    status   : 'failed',
+                    build    : env.BUILD_NUMBER,
+                    image    : "${env.DOCKER_REPO}:latest",
+                    container: env.APP_NAME,
+                    url      : 'http://localhost:3000/',
+                    timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX")
+                ]
+                def body = groovy.json.JsonOutput.toJson(payload)
+                try {
+                    httpRequest acceptType: 'APPLICATION_JSON',
+                                contentType: 'APPLICATION_JSON',
+                                httpMode: 'POST',
+                                requestBody: body,
+                                url: N8N_WEBHOOK_URL,
+                                validResponseCodes: '100:599'
+                    echo 'n8n webhook (failure) sent via httpRequest.'
+                } catch (err) {
+                    echo "httpRequest failed or not available: ${err}. Falling back to Java URLConnection..."
+                    try {
+                        def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
+                        conn.setRequestMethod('POST')
+                        conn.setDoOutput(true)
+                        conn.setRequestProperty('Content-Type', 'application/json')
+                        conn.getOutputStream().withWriter('UTF-8') { it << body }
+                        int rc = conn.getResponseCode()
+                        echo "n8n webhook (failure) via URLConnection, response code: ${rc}"
+                    } catch (e2) {
+                        echo "Failed to notify n8n (failure): ${e2}"
+                    }
+                }
+            }
         }
     }
-
 }
