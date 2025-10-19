@@ -18,7 +18,7 @@ def sendNotificationToN8n(String status, String stageName) {
                 build    : env.BUILD_NUMBER,
                 image    : "${env.DOCKER_REPO}:latest",
                 container: env.APP_NAME,
-                url      : 'http://localhost:3000/',
+                url      : 'http://10.10.10.20:3900/',
                 timestamp: new Date().format("yyyy-MM-dd'T'HH:mm:ssXXX")
             ]
             def body = groovy.json.JsonOutput.toJson(payload)
@@ -163,7 +163,7 @@ pipeline {
                     docker pull ${DOCKER_REPO}:latest
                     docker stop ${APP_NAME} || true
                     docker rm ${APP_NAME} || true
-                    docker run -d --name ${APP_NAME} -p 3000:3000 ${DOCKER_REPO}:latest
+                    docker run -d --name ${APP_NAME} -p 3900:3900 ${DOCKER_REPO}:latest
                     docker ps --filter name=${APP_NAME} --format "table {{.Names}}\\t{{.Image}}\\t{{.Status}}"
                 """
             }
